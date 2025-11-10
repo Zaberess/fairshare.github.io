@@ -43,7 +43,6 @@
   .status .ok{color:#1a7f37}
   pre{white-space:pre-wrap;word-break:break-word}
 </style>
-<script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 <header>
@@ -72,13 +71,15 @@
   <div class="footer">Tip: tap a chore to mark it as completed by the selected person. Long-press to undo.</div>
 </main>
 
-<script>
-/* ====== CONFIG: your Supabase project values ====== */
+<!-- Main app script as an ES module -->
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+
 const SUPABASE_URL  = 'https://nrqgdvnqfpjmejjkxjjt.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycWdkdm5xZnBqbWVqamt4amp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3OTUxNTUsImV4cCI6MjA3ODM3MTE1NX0.itfW0GiNrY-AotR9MVEcTOCeKv6ENGw155WkD8JPIQ4';
-/* ================================================== */
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
 const statusBar  = document.getElementById('status');
 const groupsBox  = document.getElementById('groups');
 const btnKyle    = document.getElementById('btnKyle');
@@ -90,9 +91,7 @@ const seedBtn    = document.getElementById('seedBtn');
 let currentUser = localStorage.getItem('fs_user') || 'Kyle';
 let chores = [];
 
-function setStatus(text, ok=true){
-  statusBar.innerHTML = ok ? `<span class="ok">✓</span> ${text}` : `<span class="bad">⚠</span> ${text}`;
-}
+function setStatus(text, ok=true){ statusBar.innerHTML = ok ? `<span class="ok">✓</span> ${text}` : `<span class="bad">⚠</span> ${text}`; }
 
 function applyUserUI(){
   const kOn = currentUser === 'Kyle';
@@ -249,7 +248,6 @@ async function load(){
   render(data);
 }
 
-// run with explicit catch so errors show in the status bar
 load().catch(err => setStatus(`JS error: ${err.message}`, false));
 </script>
 </body>
