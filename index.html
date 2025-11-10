@@ -151,10 +151,9 @@ function groupTitle(freq){ return ({ daily:'Today', as_needed:'As needed', weekl
 /* Normalise a row from DB → what UI expects */
 function normaliseRow(r){
   const freq = (r.frequency ?? '').toString().trim().toLowerCase()
-    .replace(/\s+/g,'_')           // "as needed" -> "as_needed"
+    .replace(/\s+/g,'_')
     .replace('semi-annual','semiannual')
     .replace('semi_annual','semiannual');
-
   return {
     id: r.id,
     title: r.title ?? '',
@@ -211,6 +210,11 @@ function render(raw){
       const tick = document.createElement('div'); tick.className='tick' + (done ? ' done':''); tick.innerHTML = done ? '✓' : '';
       right.appendChild(tick);
 
+      /* THE FIX – actually append the content to the row */
+      row.appendChild(left);
+      row.appendChild(right);
+
+      // tap to mark done
       row.addEventListener('click', async () => {
         const nowIso = new Date().toISOString();
         const { error } = await sb.from('chores').update({ last_completed_at: nowIso, last_completed_by: currentUser }).eq('id', c.id);
