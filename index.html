@@ -19,7 +19,7 @@
   main{padding:12px}
   .row{display:flex;gap:8px;align-items:center}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:12px}
-  .group-title{font-weight:600;font-size:14px;opacity:.7;margin:4px 6px 8px}
+  .group-title{font-weight:600;font-size:14px;opacity:.7;margin:4px 6px 8px;display:flex;justify-content:space-between}
   .item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:10px;-webkit-tap-highlight-color:transparent}
   .item + .item{border-top:1px solid #f0f0f0}
   .left{min-width:0}
@@ -71,7 +71,6 @@
   <div class="footer">Tip: tap a chore to mark it as completed by the selected person. Long-press to undo.</div>
 </main>
 
-<!-- Main app script as an ES module -->
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 
@@ -79,7 +78,6 @@ const SUPABASE_URL  = 'https://nrqgdvnqfpjmejjkxjjt.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycWdkdm5xZnBqbWVqamt4amp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3OTUxNTUsImV4cCI6MjA3ODM3MTE1NX0.itfW0GiNrY-AotR9MVEcTOCeKv6ENGw155WkD8JPIQ4';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
-
 const statusBar  = document.getElementById('status');
 const groupsBox  = document.getElementById('groups');
 const btnKyle    = document.getElementById('btnKyle');
@@ -92,14 +90,7 @@ let currentUser = localStorage.getItem('fs_user') || 'Kyle';
 let chores = [];
 
 function setStatus(text, ok=true){ statusBar.innerHTML = ok ? `<span class="ok">✓</span> ${text}` : `<span class="bad">⚠</span> ${text}`; }
-
-function applyUserUI(){
-  const kOn = currentUser === 'Kyle';
-  btnKyle.classList.toggle('on', kOn);
-  btnKyle.setAttribute('aria-selected', kOn ? 'true':'false');
-  btnEloise.classList.toggle('on', !kOn);
-  btnEloise.setAttribute('aria-selected', !kOn ? 'true':'false');
-}
+function applyUserUI(){ const kOn = currentUser === 'Kyle'; btnKyle.classList.toggle('on', kOn); btnKyle.setAttribute('aria-selected', kOn?'true':'false'); btnEloise.classList.toggle('on', !kOn); btnEloise.setAttribute('aria-selected', !kOn?'true':'false'); }
 btnKyle.addEventListener('click', ()=>{ currentUser='Kyle'; localStorage.setItem('fs_user', currentUser); applyUserUI(); });
 btnEloise.addEventListener('click', ()=>{ currentUser='Eloise'; localStorage.setItem('fs_user', currentUser); applyUserUI(); });
 
@@ -120,9 +111,10 @@ seedBtn.addEventListener('click', async ()=>{
 
 applyUserUI();
 
+/* ---------- helpers ---------- */
 function startOfWeek(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setHours(0,0,0,0); x.setDate(x.getDate()-day); return x; }
 function startOfMonth(d){ const x=new Date(d); x.setHours(0,0,0,0); x.setDate(1); return x; }
-function startOfQuarter(d){ const x=new Date(d); x.setHours(0,0,0,0); const q=Math.floor(x.getMonth()/3)*3; x.setMonth(q,1); return x; }
+function startOfQuarter(d){ const x=new Date(d); const q=Math.floor(x.getMonth()/3)*3; x.setHours(0,0,0,0); x.setMonth(q,1); return x; }
 function startOfHalf(d){ const x=new Date(d); x.setHours(0,0,0,0); x.setMonth(x.getMonth()<6?0:6,1); return x; }
 function startOfYear(d){ const x=new Date(d); x.setHours(0,0,0,0); x.setMonth(0,1); return x; }
 
@@ -139,8 +131,8 @@ function periodStart(freq, now=new Date()){
   }
 }
 function isDoneForPeriod(c){
-  if(!c.last_completed_at) return false;
-  const doneAt = new Date(c.last_completed_at);
+  const doneAt = c.last_completed_at ? new Date(c.last_completed_at) : null;
+  if(!doneAt) return false;
   if(c.frequency === 'as_needed'){ const todayStart = periodStart('daily'); return doneAt >= todayStart; }
   const ps = periodStart(c.frequency); return ps ? (doneAt >= ps) : false;
 }
@@ -154,16 +146,34 @@ function since(ts){
   return d.toLocaleDateString();
 }
 function groupOrder(freq){ return ['daily','as_needed','weekly','monthly','quarterly','semiannual','annual'].indexOf(freq); }
-function groupTitle(freq){
-  return ({ daily:'Today', as_needed:'As needed', weekly:'This week', monthly:'This month', quarterly:'This quarter', semiannual:'This half-year', annual:'This year' })[freq] || freq;
+function groupTitle(freq){ return ({ daily:'Today', as_needed:'As needed', weekly:'This week', monthly:'This month', quarterly:'This quarter', semiannual:'This half-year', annual:'This year' })[freq] || freq; }
+
+/* Normalise a row from DB → what UI expects */
+function normaliseRow(r){
+  const freq = (r.frequency ?? '').toString().trim().toLowerCase()
+    .replace(/\s+/g,'_')           // "as needed" -> "as_needed"
+    .replace('semi-annual','semiannual')
+    .replace('semi_annual','semiannual');
+
+  return {
+    id: r.id,
+    title: r.title ?? '',
+    area: r.area ?? '',
+    frequency: ['daily','as_needed','weekly','monthly','quarterly','semiannual','annual'].includes(freq) ? freq : 'as_needed',
+    effort: Number.isFinite(r.effort) ? r.effort : (parseInt(r.effort,10) || null),
+    last_completed_at: r.last_completed_at || r.last_completed || r.completed_at || null,
+    last_completed_by: r.last_completed_by || r.completed_by || null,
+  };
 }
+
 function personChip(name){
   if(name === 'Kyle') return '<span class="chip k">Kyle</span>';
   if(name === 'Eloise') return '<span class="chip e">Eloise</span>';
   return '';
 }
 
-function render(data){
+function render(raw){
+  const data = raw.map(normaliseRow);
   chores = data.slice();
   groupsBox.innerHTML = '';
   const byFreq = {};
@@ -178,7 +188,8 @@ function render(data){
 
   for(const f of freqs){
     const card = document.createElement('div'); card.className='card';
-    const title = document.createElement('div'); title.className='group-title'; title.textContent = groupTitle(f);
+    const title = document.createElement('div'); title.className='group-title';
+    title.innerHTML = `${groupTitle(f)} <span class="meta">(${byFreq[f].length})</span>`;
     card.appendChild(title);
 
     const list = byFreq[f].sort((a,b)=> a.title.localeCompare(b.title));
