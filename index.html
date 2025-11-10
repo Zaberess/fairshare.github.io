@@ -12,12 +12,24 @@
   h1{margin:0;font-size:18px}
   .spacer{flex:1}
   .seg{display:flex;background:#f2f3f5;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .seg button{border:0;background:transparent;padding:8px 12px;font:inherit}
+  .seg button{border:0;background:transparent;padding:8px 12px;font:inherit;cursor:pointer}
   .seg .on{background:var(--card);border-left:1px solid var(--line);border-right:1px solid var(--line)}
   .kyle.on{outline:2px solid var(--kyle)}
   .eloise.on{outline:2px solid var(--eloise)}
+
+  .score{background:#fff;border-bottom:1px solid var(--line);padding:8px 12px;font-size:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .pill{padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-weight:600}
+  .pill.k{border-color:var(--kyle);color:var(--kyle)}
+  .pill.e{border-color:var(--eloise);color:var(--eloise)}
+  .score select{padding:4px 8px;border-radius:8px;border:1px solid var(--line);background:#fff}
+
   main{padding:12px}
   .row{display:flex;gap:8px;align-items:center}
+  .btn{padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
+  .btn:hover{background:#f6f6f6}
+  .btn.small{padding:4px 8px;font-size:12px}
+  .btn.ghost{background:transparent}
+
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:12px}
   .group-title{font-weight:600;font-size:14px;opacity:.7;margin:4px 6px 8px;display:flex;justify-content:space-between}
   .item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:10px;-webkit-tap-highlight-color:transparent}
@@ -29,10 +41,11 @@
   .chip{font-size:11px;border:1px solid var(--line);padding:2px 8px;border-radius:999px;white-space:nowrap}
   .chip.k{border-color:var(--kyle);color:var(--kyle)}
   .chip.e{border-color:var(--eloise);color:var(--eloise)}
+  .right{display:flex;align-items:center;gap:8px}
   .tick{width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:grid;place-items:center;flex:0 0 24px}
   .tick.done{border-color:var(--tick);background:#e9f6ee;color:var(--tick)}
   .toolbar{display:flex;gap:8px;align-items:center;margin:0 0 12px}
-  .toggle{appearance:none;width:42px;height:26px;border-radius:999px;background:#ddd;position:relative;outline:0;border:0}
+  .toggle{appearance:none;width:42px;height:26px;border-radius:999px;background:#ddd;position:relative;outline:0;border:0;cursor:pointer}
   .toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.15s}
   .toggle:checked{background:#8bd49a}
   .toggle:checked::after{left:19px}
@@ -56,6 +69,21 @@
 
 <div class="status" id="status">Checking…</div>
 
+<!-- Scoreboard -->
+<div class="score" id="score">
+  <span class="pill k" id="scoreKyle">Kyle: 0</span>
+  <span class="pill e" id="scoreEloise">Eloise: 0</span>
+  <span style="color:#666;font-size:12px">Points in:</span>
+  <select id="scoreRange">
+    <option value="daily">Today</option>
+    <option value="weekly" selected>This week</option>
+    <option value="monthly">This month</option>
+    <option value="quarterly">This quarter</option>
+    <option value="semiannual">This half-year</option>
+    <option value="annual">This year</option>
+  </select>
+</div>
+
 <main>
   <div class="toolbar">
     <label class="row" style="gap:6px;font-size:13px;">
@@ -63,12 +91,12 @@
       <span>Hide completed</span>
     </label>
     <div class="spacer"></div>
-    <button id="seedBtn" title="Insert two demo chores">Add sample chores</button>
-    <button id="refreshBtn">Refresh</button>
+    <button id="seedBtn" class="btn small" title="Insert two demo chores">Add sample chores</button>
+    <button id="refreshBtn" class="btn small">Refresh</button>
   </div>
 
   <div id="groups"></div>
-  <div class="footer">Tip: tap a chore to mark it as completed by the selected person. Long-press to undo.</div>
+  <div class="footer">Tap a chore to mark it done. Use the “Undo” button to revert.</div>
 </main>
 
 <script type="module">
@@ -78,16 +106,20 @@ const SUPABASE_URL  = 'https://nrqgdvnqfpjmejjkxjjt.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycWdkdm5xZnBqbWVqamt4amp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3OTUxNTUsImV4cCI6MjA3ODM3MTE1NX0.itfW0GiNrY-AotR9MVEcTOCeKv6ENGw155WkD8JPIQ4';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
-const statusBar  = document.getElementById('status');
-const groupsBox  = document.getElementById('groups');
-const btnKyle    = document.getElementById('btnKyle');
-const btnEloise  = document.getElementById('btnEloise');
+const statusBar   = document.getElementById('status');
+const groupsBox   = document.getElementById('groups');
+const btnKyle     = document.getElementById('btnKyle');
+const btnEloise   = document.getElementById('btnEloise');
 const hideCompleted = document.getElementById('hideCompleted');
-const refreshBtn = document.getElementById('refreshBtn');
-const seedBtn    = document.getElementById('seedBtn');
+const refreshBtn  = document.getElementById('refreshBtn');
+const seedBtn     = document.getElementById('seedBtn');
+const scoreKyle   = document.getElementById('scoreKyle');
+const scoreEloise = document.getElementById('scoreEloise');
+const scoreRange  = document.getElementById('scoreRange');
 
 let currentUser = localStorage.getItem('fs_user') || 'Kyle';
 let chores = [];
+let scoreboardPeriod = scoreRange.value;
 
 function setStatus(text, ok=true){ statusBar.innerHTML = ok ? `<span class="ok">✓</span> ${text}` : `<span class="bad">⚠</span> ${text}`; }
 function applyUserUI(){ const kOn = currentUser === 'Kyle'; btnKyle.classList.toggle('on', kOn); btnKyle.setAttribute('aria-selected', kOn?'true':'false'); btnEloise.classList.toggle('on', !kOn); btnEloise.setAttribute('aria-selected', !kOn?'true':'false'); }
@@ -96,7 +128,9 @@ btnEloise.addEventListener('click', ()=>{ currentUser='Eloise'; localStorage.set
 
 hideCompleted.checked = localStorage.getItem('fs_hide') === '1';
 hideCompleted.addEventListener('change', ()=>{ localStorage.setItem('fs_hide', hideCompleted.checked?'1':'0'); render(chores); });
+
 refreshBtn.addEventListener('click', ()=> { load().catch(e=>setStatus(`JS error: ${e.message}`, false)); });
+scoreRange.addEventListener('change', ()=>{ scoreboardPeriod = scoreRange.value; updateScore(); });
 
 seedBtn.addEventListener('click', async ()=>{
   const rows = [
@@ -148,12 +182,16 @@ function since(ts){
 function groupOrder(freq){ return ['daily','as_needed','weekly','monthly','quarterly','semiannual','annual'].indexOf(freq); }
 function groupTitle(freq){ return ({ daily:'Today', as_needed:'As needed', weekly:'This week', monthly:'This month', quarterly:'This quarter', semiannual:'This half-year', annual:'This year' })[freq] || freq; }
 
-/* Normalise a row from DB → what UI expects */
+/* Map effort (1–10) → points 10–50 */
+function effortToPoints(eff){
+  const scaled = Math.min(5, Math.max(1, Math.round((Number(eff)||0)/2)));
+  return scaled * 10;
+}
+
+/* Normalise DB row */
 function normaliseRow(r){
   const freq = (r.frequency ?? '').toString().trim().toLowerCase()
-    .replace(/\s+/g,'_')
-    .replace('semi-annual','semiannual')
-    .replace('semi_annual','semiannual');
+    .replace(/\s+/g,'_').replace('semi-annual','semiannual').replace('semi_annual','semiannual');
   return {
     id: r.id,
     title: r.title ?? '',
@@ -165,6 +203,21 @@ function normaliseRow(r){
   };
 }
 
+/* Recompute and paint the totals for selected scoreboard period */
+function updateScore(){
+  const sinceDate = periodStart(scoreboardPeriod);
+  let k=0, e=0;
+  for(const c of chores){
+    if(!c.last_completed_at || !c.last_completed_by) continue;
+    if(sinceDate && new Date(c.last_completed_at) < sinceDate) continue;
+    const pts = effortToPoints(c.effort);
+    if(c.last_completed_by === 'Kyle') k += pts;
+    if(c.last_completed_by === 'Eloise') e += pts;
+  }
+  scoreKyle.textContent   = `Kyle: ${k}`;
+  scoreEloise.textContent = `Eloise: ${e}`;
+}
+
 function personChip(name){
   if(name === 'Kyle') return '<span class="chip k">Kyle</span>';
   if(name === 'Eloise') return '<span class="chip e">Eloise</span>';
@@ -172,8 +225,7 @@ function personChip(name){
 }
 
 function render(raw){
-  const data = raw.map(normaliseRow);
-  chores = data.slice();
+  chores = raw.map(normaliseRow);
   groupsBox.innerHTML = '';
   const byFreq = {};
   for(const c of chores){ (byFreq[c.frequency] ||= []).push(c); }
@@ -182,6 +234,7 @@ function render(raw){
   if(freqs.length === 0){
     groupsBox.innerHTML = '<div class="card"><div class="group-title">No chores found</div><div class="meta">Click “Add sample chores”, or seed the table in Supabase.</div></div>';
     setStatus('Connected, but no rows found.', false);
+    updateScore();
     return;
   }
 
@@ -198,7 +251,7 @@ function render(raw){
 
       const row = document.createElement('div'); row.className='item'; row.dataset.id = c.id;
       const left = document.createElement('div'); left.className='left';
-      const right = document.createElement('div');
+      const right = document.createElement('div'); right.className='right';
 
       const nameMeta = c.last_completed_by ? ` • ${c.last_completed_by}` : '';
       const metaLine = `${c.area || '—'} • Effort ${c.effort ?? '—'} • ${since(c.last_completed_at)}${nameMeta}`;
@@ -208,45 +261,51 @@ function render(raw){
                         <div class="chips">${personChip(c.last_completed_by)}</div>`;
 
       const tick = document.createElement('div'); tick.className='tick' + (done ? ' done':''); tick.innerHTML = done ? '✓' : '';
-      right.appendChild(tick);
+      const undoBtn = document.createElement('button'); undoBtn.className='btn small ghost'; undoBtn.textContent='Undo';
+      undoBtn.style.display = done ? 'inline-block' : 'none';
 
-      /* THE FIX – actually append the content to the row */
+      right.appendChild(tick);
+      right.appendChild(undoBtn);
+
       row.appendChild(left);
       row.appendChild(right);
 
-      // tap to mark done
-      row.addEventListener('click', async () => {
+      // mark done on row click
+      row.addEventListener('click', async (ev) => {
+        // ignore clicks on the Undo button
+        if(ev.target === undoBtn) return;
         const nowIso = new Date().toISOString();
         const { error } = await sb.from('chores').update({ last_completed_at: nowIso, last_completed_by: currentUser }).eq('id', c.id);
         if(error){ setStatus(`Update error: ${error.message}`, false); alert('Error: '+error.message); return; }
         c.last_completed_at = nowIso; c.last_completed_by = currentUser;
         tick.classList.add('done'); tick.innerHTML = '✓';
+        undoBtn.style.display = 'inline-block';
         left.querySelector('.meta').textContent = `${c.area || '—'} • Effort ${c.effort ?? '—'} • ${since(c.last_completed_at)} • ${c.last_completed_by}`;
         left.querySelector('.chips').innerHTML = personChip(c.last_completed_by);
         setStatus('Updated ✔');
+        updateScore();
       }, { passive:true });
 
-      // long-press to undo
-      let pressTimer;
-      row.addEventListener('touchstart', () => {
-        pressTimer = setTimeout(async () => {
-          const { error } = await sb.from('chores').update({ last_completed_at: null, last_completed_by: null }).eq('id', c.id);
-          if(error){ setStatus(`Undo error: ${error.message}`, false); alert('Error: '+error.message); return; }
-          c.last_completed_at = null; c.last_completed_by = null;
-          tick.classList.remove('done'); tick.innerHTML = '';
-          left.querySelector('.meta').textContent = `${c.area || '—'} • Effort ${c.effort ?? '—'} • —`;
-          left.querySelector('.chips').innerHTML = '';
-          setStatus('Undone ✔');
-        }, 600);
+      // explicit Undo button (works on any device)
+      undoBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const { error } = await sb.from('chores').update({ last_completed_at: null, last_completed_by: null }).eq('id', c.id);
+        if(error){ setStatus(`Undo error: ${error.message}`, false); alert('Error: '+error.message); return; }
+        c.last_completed_at = null; c.last_completed_by = null;
+        tick.classList.remove('done'); tick.innerHTML = '';
+        undoBtn.style.display = 'none';
+        left.querySelector('.meta').textContent = `${c.area || '—'} • Effort ${c.effort ?? '—'} • —`;
+        left.querySelector('.chips').innerHTML = '';
+        setStatus('Undone ✔');
+        updateScore();
       });
-      row.addEventListener('touchend', ()=> clearTimeout(pressTimer));
-      row.addEventListener('touchmove', ()=> clearTimeout(pressTimer));
 
       card.appendChild(row);
     }
     groupsBox.appendChild(card);
   }
   setStatus('Loaded ✔');
+  updateScore();
 }
 
 async function load(){
