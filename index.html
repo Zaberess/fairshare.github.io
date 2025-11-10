@@ -5,11 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>FairShare</title>
 <style>
-  :root{
-    --kyle:#1e6fff;      /* blue */
-    --eloise:#b57edc;    /* lavender */
-    --bg:#f7f7f8; --card:#fff; --line:#eee; --text:#111; --muted:#777; --tick:#1a7f37;
-  }
+  :root{ --kyle:#1e6fff; --eloise:#b57edc; --bg:#f7f7f8; --card:#fff; --line:#eee; --text:#111; --muted:#777; --tick:#1a7f37; }
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
   header{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line);padding:10px 12px;display:flex;gap:10px;align-items:center;z-index:10}
@@ -42,6 +38,10 @@
   .toggle:checked::after{left:19px}
   .footer{text-align:center;color:#999;font-size:12px;padding:10px 0 36px}
   .hidden{display:none}
+  .status{background:#fff;border-bottom:1px solid var(--line);padding:8px 12px;font-size:12px;color:#333}
+  .status .bad{color:#b00020}
+  .status .ok{color:#1a7f37}
+  pre{white-space:pre-wrap;word-break:break-word}
 </style>
 <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
@@ -55,6 +55,8 @@
   </div>
 </header>
 
+<div class="status" id="status">Checking…</div>
+
 <main>
   <div class="toolbar">
     <label class="row" style="gap:6px;font-size:13px;">
@@ -62,6 +64,7 @@
       <span>Hide completed</span>
     </label>
     <div class="spacer"></div>
+    <button id="seedBtn" title="Insert two demo chores">Add sample chores</button>
     <button id="refreshBtn">Refresh</button>
   </div>
 
@@ -70,21 +73,24 @@
 </main>
 
 <script>
-/* ====== CONFIG: replace with your Supabase project values ====== */
+/* ====== CONFIG: your Supabase project values ====== */
 const SUPABASE_URL  = 'https://nrqgdvnqfpjmejjkxjjt.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycWdkdm5xZnBqbWVqamt4amp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3OTUxNTUsImV4cCI6MjA3ODM3MTE1NX0.itfW0GiNrY-AotR9MVEcTOCeKv6ENGw155WkD8JPIQ4';
-/* =============================================================== */
+/* ================================================== */
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const groupsBox = document.getElementById('groups');
-const btnKyle = document.getElementById('btnKyle');
-const btnEloise = document.getElementById('btnEloise');
+const statusBar  = document.getElementById('status');
+const groupsBox  = document.getElementById('groups');
+const btnKyle    = document.getElementById('btnKyle');
+const btnEloise  = document.getElementById('btnEloise');
 const hideCompleted = document.getElementById('hideCompleted');
 const refreshBtn = document.getElementById('refreshBtn');
+const seedBtn    = document.getElementById('seedBtn');
 
-const USERS = ['Kyle','Eloise'];
 let currentUser = localStorage.getItem('fs_user') || 'Kyle';
 let chores = [];
+
+function setStatus(text, ok=true){ statusBar.innerHTML = ok ? `<span class="ok">✓</span> ${text}` : `<span class="bad">⚠</span> ${text}`; }
 
 function applyUserUI(){
   const kOn = currentUser === 'Kyle';
@@ -99,6 +105,17 @@ btnEloise.addEventListener('click', ()=>{ currentUser='Eloise'; localStorage.set
 hideCompleted.checked = localStorage.getItem('fs_hide') === '1';
 hideCompleted.addEventListener('change', ()=>{ localStorage.setItem('fs_hide', hideCompleted.checked?'1':'0'); render(chores); });
 refreshBtn.addEventListener('click', ()=> load());
+
+seedBtn.addEventListener('click', async ()=>{
+  const rows = [
+    { title:'Test chore', area:'Kitchen', frequency:'daily', effort:1 },
+    { title:'Vacuum', area:'All Rooms', frequency:'weekly', effort:4 }
+  ];
+  const { error } = await sb.from('chores').insert(rows);
+  if(error){ setStatus(`Insert error: ${error.message}`, false); return; }
+  setStatus('Added sample chores. Reloading…');
+  await load();
+});
 
 applyUserUI();
 
@@ -123,12 +140,8 @@ function periodStart(freq, now=new Date()){
 function isDoneForPeriod(c){
   if(!c.last_completed_at) return false;
   const doneAt = new Date(c.last_completed_at);
-  if(c.frequency === 'as_needed'){
-    const todayStart = periodStart('daily');
-    return doneAt >= todayStart;
-  }
-  const ps = periodStart(c.frequency);
-  return ps ? (doneAt >= ps) : false;
+  if(c.frequency === 'as_needed'){ const todayStart = periodStart('daily'); return doneAt >= todayStart; }
+  const ps = periodStart(c.frequency); return ps ? (doneAt >= ps) : false;
 }
 function since(ts){
   if(!ts) return '—';
@@ -139,21 +152,10 @@ function since(ts){
   if(diff < 86400) return `${Math.floor(diff/3600)} h ago`;
   return d.toLocaleDateString();
 }
-function groupOrder(freq){
-  return ['daily','as_needed','weekly','monthly','quarterly','semiannual','annual'].indexOf(freq);
-}
+function groupOrder(freq){ return ['daily','as_needed','weekly','monthly','quarterly','semiannual','annual'].indexOf(freq); }
 function groupTitle(freq){
-  return ({
-    daily:'Today',
-    as_needed:'As needed',
-    weekly:'This week',
-    monthly:'This month',
-    quarterly:'This quarter',
-    semiannual:'This half-year',
-    annual:'This year'
-  })[freq] || freq;
+  return ({ daily:'Today', as_needed:'As needed', weekly:'This week', monthly:'This month', quarterly:'This quarter', semiannual:'This half-year', annual:'This year' })[freq] || freq;
 }
-
 function personChip(name){
   if(name === 'Kyle') return '<span class="chip k">Kyle</span>';
   if(name === 'Eloise') return '<span class="chip e">Eloise</span>';
@@ -161,91 +163,17 @@ function personChip(name){
 }
 
 function render(data){
-  chores = data.slice(); // keep
+  chores = data.slice();
   groupsBox.innerHTML = '';
   const byFreq = {};
-  for(const c of chores){
-    (byFreq[c.frequency] ||= []).push(c);
-  }
+  for(const c of chores){ (byFreq[c.frequency] ||= []).push(c); }
   const freqs = Object.keys(byFreq).sort((a,b)=>groupOrder(a)-groupOrder(b));
 
-  for(const f of freqs){
-    const card = document.createElement('div'); card.className='card';
-    const title = document.createElement('div'); title.className='group-title'; title.textContent = groupTitle(f);
-    card.appendChild(title);
-
-    const list = byFreq[f].sort((a,b)=> a.title.localeCompare(b.title));
-
-    for(const c of list){
-      const done = isDoneForPeriod(c);
-      if(hideCompleted.checked && done) continue;
-
-      const row = document.createElement('div'); row.className='item'; row.dataset.id = c.id;
-
-      const left = document.createElement('div'); left.className='left';
-      const right = document.createElement('div');
-
-      const nameMeta = c.last_completed_by ? ` • ${c.last_completed_by}` : '';
-      const metaLine = `${c.area || '—'} • Effort ${c.effort ?? '—'} • ${since(c.last_completed_at)}${nameMeta}`;
-
-      left.innerHTML = `<div class="title">${c.title}</div>
-                        <div class="meta">${metaLine}</div>
-                        <div class="chips">${personChip(c.last_completed_by)}</div>`;
-
-      const tick = document.createElement('div'); tick.className='tick' + (done ? ' done':''); tick.innerHTML = done ? '✓' : '';
-      right.appendChild(tick);
-
-      // Tap to mark done by current user
-      row.addEventListener('click', async () => {
-        const nowIso = new Date().toISOString();
-        const { error } = await sb.from('chores')
-          .update({ last_completed_at: nowIso, last_completed_by: currentUser })
-          .eq('id', c.id);
-        if(error){ alert('Error: '+error.message); return; }
-        c.last_completed_at = nowIso;
-        c.last_completed_by = currentUser;
-        // update UI
-        tick.classList.add('done'); tick.innerHTML = '✓';
-        left.querySelector('.meta').textContent =
-          `${c.area || '—'} • Effort ${c.effort ?? '—'} • ${since(c.last_completed_at)} • ${c.last_completed_by}`;
-        left.querySelector('.chips').innerHTML = personChip(c.last_completed_by);
-      }, { passive:true });
-
-      // Long-press to undo (clear completion)
-      let pressTimer;
-      row.addEventListener('touchstart', () => {
-        pressTimer = setTimeout(async () => {
-          const { error } = await sb.from('chores')
-            .update({ last_completed_at: null, last_completed_by: null })
-            .eq('id', c.id);
-          if(error){ alert('Error: '+error.message); return; }
-          c.last_completed_at = null; c.last_completed_by = null;
-          tick.classList.remove('done'); tick.innerHTML = '';
-          left.querySelector('.meta').textContent =
-            `${c.area || '—'} • Effort ${c.effort ?? '—'} • —`;
-          left.querySelector('.chips').innerHTML = '';
-        }, 600); // hold 600ms
-      });
-      row.addEventListener('touchend', ()=> clearTimeout(pressTimer));
-      row.addEventListener('touchmove', ()=> clearTimeout(pressTimer));
-
-      card.appendChild(row);
-    }
-
-    groupsBox.appendChild(card);
+  if(freqs.length === 0){
+    groupsBox.innerHTML = '<div class="card"><div class="group-title">No chores found</div><div class="meta">Click “Add sample chores”, or seed the table in Supabase.</div></div>';
+    setStatus('Connected, but no rows found.', false);
+    return;
   }
-}
 
-async function load(){
-  const { data, error } = await sb.from('chores')
-    .select('*')
-    .order('frequency', { ascending: true })
-    .order('title', { ascending: true });
-  if(error){ groupsBox.innerHTML = '<div class="card">Error loading chores.</div>'; return; }
-  render(data);
-}
-
-load();
-</script>
-</body>
-</html>
+  for(const f of freqs){
+    const card = document.createElement('div');
