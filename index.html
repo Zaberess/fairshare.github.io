@@ -90,7 +90,9 @@ const seedBtn    = document.getElementById('seedBtn');
 let currentUser = localStorage.getItem('fs_user') || 'Kyle';
 let chores = [];
 
-function setStatus(text, ok=true){ statusBar.innerHTML = ok ? `<span class="ok">✓</span> ${text}` : `<span class="bad">⚠</span> ${text}`; }
+function setStatus(text, ok=true){
+  statusBar.innerHTML = ok ? `<span class="ok">✓</span> ${text}` : `<span class="bad">⚠</span> ${text}`;
+}
 
 function applyUserUI(){
   const kOn = currentUser === 'Kyle';
@@ -104,17 +106,17 @@ btnEloise.addEventListener('click', ()=>{ currentUser='Eloise'; localStorage.set
 
 hideCompleted.checked = localStorage.getItem('fs_hide') === '1';
 hideCompleted.addEventListener('change', ()=>{ localStorage.setItem('fs_hide', hideCompleted.checked?'1':'0'); render(chores); });
-refreshBtn.addEventListener('click', ()=> load());
+refreshBtn.addEventListener('click', ()=> { load().catch(e=>setStatus(`JS error: ${e.message}`, false)); });
 
 seedBtn.addEventListener('click', async ()=>{
   const rows = [
-    { title:'Test chore', area:'Kitchen', frequency:'daily', effort:1 },
-    { title:'Vacuum', area:'All Rooms', frequency:'weekly', effort:4 }
+    { title:'Test chore', area:'Kitchen', frequency:'daily',  effort:1 },
+    { title:'Vacuum',     area:'All Rooms', frequency:'weekly', effort:4 }
   ];
   const { error } = await sb.from('chores').insert(rows);
   if(error){ setStatus(`Insert error: ${error.message}`, false); return; }
   setStatus('Added sample chores. Reloading…');
-  await load();
+  await load().catch(e=>setStatus(`JS error: ${e.message}`, false));
 });
 
 applyUserUI();
@@ -176,4 +178,79 @@ function render(data){
   }
 
   for(const f of freqs){
-    const card = document.createElement('div');
+    const card = document.createElement('div'); card.className='card';
+    const title = document.createElement('div'); title.className='group-title'; title.textContent = groupTitle(f);
+    card.appendChild(title);
+
+    const list = byFreq[f].sort((a,b)=> a.title.localeCompare(b.title));
+    for(const c of list){
+      const done = isDoneForPeriod(c);
+      if(hideCompleted.checked && done) continue;
+
+      const row = document.createElement('div'); row.className='item'; row.dataset.id = c.id;
+      const left = document.createElement('div'); left.className='left';
+      const right = document.createElement('div');
+
+      const nameMeta = c.last_completed_by ? ` • ${c.last_completed_by}` : '';
+      const metaLine = `${c.area || '—'} • Effort ${c.effort ?? '—'} • ${since(c.last_completed_at)}${nameMeta}`;
+
+      left.innerHTML = `<div class="title">${c.title}</div>
+                        <div class="meta">${metaLine}</div>
+                        <div class="chips">${personChip(c.last_completed_by)}</div>`;
+
+      const tick = document.createElement('div'); tick.className='tick' + (done ? ' done':''); tick.innerHTML = done ? '✓' : '';
+      right.appendChild(tick);
+
+      row.addEventListener('click', async () => {
+        const nowIso = new Date().toISOString();
+        const { error } = await sb.from('chores').update({ last_completed_at: nowIso, last_completed_by: currentUser }).eq('id', c.id);
+        if(error){ setStatus(`Update error: ${error.message}`, false); alert('Error: '+error.message); return; }
+        c.last_completed_at = nowIso; c.last_completed_by = currentUser;
+        tick.classList.add('done'); tick.innerHTML = '✓';
+        left.querySelector('.meta').textContent = `${c.area || '—'} • Effort ${c.effort ?? '—'} • ${since(c.last_completed_at)} • ${c.last_completed_by}`;
+        left.querySelector('.chips').innerHTML = personChip(c.last_completed_by);
+        setStatus('Updated ✔');
+      }, { passive:true });
+
+      // long-press to undo
+      let pressTimer;
+      row.addEventListener('touchstart', () => {
+        pressTimer = setTimeout(async () => {
+          const { error } = await sb.from('chores').update({ last_completed_at: null, last_completed_by: null }).eq('id', c.id);
+          if(error){ setStatus(`Undo error: ${error.message}`, false); alert('Error: '+error.message); return; }
+          c.last_completed_at = null; c.last_completed_by = null;
+          tick.classList.remove('done'); tick.innerHTML = '';
+          left.querySelector('.meta').textContent = `${c.area || '—'} • Effort ${c.effort ?? '—'} • —`;
+          left.querySelector('.chips').innerHTML = '';
+          setStatus('Undone ✔');
+        }, 600);
+      });
+      row.addEventListener('touchend', ()=> clearTimeout(pressTimer));
+      row.addEventListener('touchmove', ()=> clearTimeout(pressTimer));
+
+      card.appendChild(row);
+    }
+    groupsBox.appendChild(card);
+  }
+  setStatus('Loaded ✔');
+}
+
+async function load(){
+  const { data, error } = await sb.from('chores')
+    .select('*')
+    .order('frequency', { ascending: true })
+    .order('title', { ascending: true });
+
+  if(error){
+    groupsBox.innerHTML = `<div class="card"><div class="group-title">Load error</div><pre>${error.message}</pre></div>`;
+    setStatus(`Load error: ${error.message}`, false);
+    return;
+  }
+  render(data);
+}
+
+// run with explicit catch so errors show in the status bar
+load().catch(err => setStatus(`JS error: ${err.message}`, false));
+</script>
+</body>
+</html>
